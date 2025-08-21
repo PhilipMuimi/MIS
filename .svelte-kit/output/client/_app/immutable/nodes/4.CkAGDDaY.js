@@ -1,0 +1,1 @@
+import{f as r,a}from"../chunks/Bviv_xbs.js";import"../chunks/VE9fC3FM.js";import"../chunks/aLXkHD-W.js";var p=r('<h1 class="text-xl font-bold">Register</h1>');function s(o){var t=p();a(o,t)}export{s as component};

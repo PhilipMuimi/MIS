@@ -1,0 +1,1 @@
+import{f as t,a as p}from"../chunks/Bviv_xbs.js";import"../chunks/VE9fC3FM.js";import"../chunks/aLXkHD-W.js";var r=t('<h1 class="text-xl font-bold">Campaigns</h1>');function e(o){var a=r();p(o,a)}export{e as component};

@@ -1,0 +1,21 @@
+{
+	"/": [],
+	"/auth/login": [],
+	"/auth/register": [],
+	"/dashboard": [],
+	"/documents": [],
+	"/finance": [],
+	"/finance/reports": [],
+	"/finance/transaction": [],
+	"/hr": [],
+	"/hr/employees": [],
+	"/hr/recruitment": [],
+	"/rnd": [],
+	"/rnd/projects": [],
+	"/rnd/projects/[id]": [],
+	"/sales": [],
+	"/sales/campaigns": [],
+	"/sales/campaigns/[id]": [],
+	"/sales/reports": [],
+	"/settings": []
+}

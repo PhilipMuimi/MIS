@@ -1,0 +1,28 @@
+digraph GONEP_IMS_Architecture {
+	rankdir=LR splines=ortho
+	Frontend [label="Frontend (SvelteKit + TypeScript + Tailwind + Bun)" fillcolor=lightblue shape=box style=filled]
+	FirebaseAuth [label="Firebase Auth" fillcolor=lightyellow shape=box style=filled]
+	Firestore [label="Firebase Firestore
+(Website DB + Public Data)" fillcolor=lightyellow shape=box style=filled]
+	FirebaseHosting [label="Firebase Hosting
+(Public Website)" fillcolor=lightyellow shape=box style=filled]
+	PocketBase [label="PocketBase IMS Backend
+- Finance
+- HR
+- R&D
+- Audit Logs
+- File Storage" fillcolor=lightgreen shape=box style=filled]
+	Sync [label="Sync / Cloud Functions
+- KPI sync
+- Alerts
+- Reporting" fillcolor=lightgray shape=box style=filled]
+	Users [label="Users (Staff, Managers, Execs)" fillcolor=white shape=ellipse style=filled]
+	Users -> Frontend
+	Frontend -> FirebaseAuth
+	Frontend -> Firestore
+	Frontend -> PocketBase
+	PocketBase -> Sync
+	Firestore -> Sync
+	Sync -> Frontend [label="Aggregated KPIs / Alerts"]
+	Frontend -> FirebaseHosting [label="Deploy Public Website" style=dashed]
+}
