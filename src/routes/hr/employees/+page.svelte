@@ -1,6 +1,9 @@
 ﻿<script lang="ts">
+  import { onMount } from 'svelte';
+  import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from '$lib/api/employees';
+
   interface Employee {
-    id: number;
+    id: string;
     name: string;
     role: string;
     department: string;
@@ -8,14 +11,35 @@
     phone: string;
     hireDate: string;
     status: string;
-    avatar: string;
+    avatar?: string;
   }
-  let employees: Employee[] = [
-    { id: 1, name: 'Jane Smith', role: 'Software Engineer', department: 'Finance', email: 'jane.smith@gonep.com', phone: '+1 (555) 123-4567', hireDate: '2021-05-01', status: 'Active', avatar: '👩‍💻' },
-    { id: 2, name: 'John Doe', role: 'HR Manager', department: 'HR', email: 'john.doe@gonep.com', phone: '+1 (555) 987-6543', hireDate: '2019-03-15', status: 'Active', avatar: '🧑‍💼' },
-    { id: 3, name: 'Alice Brown', role: 'Recruiter', department: 'HR', email: 'alice.brown@gonep.com', phone: '+1 (555) 222-3333', hireDate: '2022-08-10', status: 'Active', avatar: '👩‍🎓' },
-    { id: 4, name: 'Bob Lee', role: 'Accountant', department: 'Finance', email: 'bob.lee@gonep.com', phone: '+1 (555) 444-5555', hireDate: '2020-11-20', status: 'Inactive', avatar: '🧑‍💻' }
-  ];
+  let employees: Employee[] = [];
+  let loading = false;
+
+  async function loadEmployees() {
+    loading = true;
+    try {
+      const records = await getEmployees();
+      employees = records.map((rec: any) => ({
+        id: rec.id,
+        name: rec.name ?? '',
+        role: rec.role ?? '',
+        department: rec.department ?? '',
+        email: rec.email ?? '',
+        phone: rec.phone ?? '',
+        hireDate: rec.hireDate ?? '',
+        status: rec.status ?? '',
+        avatar: rec.avatar ?? ''
+      }));
+    } catch (e) {
+      formError = 'Failed to load employees.';
+    }
+    loading = false;
+  }
+
+  onMount(() => {
+    loadEmployees();
+  });
   let searchTerm = '';
   let selectedEmployee: Employee | null = null;
   let showEmployeeForm = false;
@@ -34,27 +58,25 @@
     formSuccess = '';
     setTimeout(() => nameInput && nameInput.focus(), 50);
   }
-  function addEmployee() {
+  async function addEmployee() {
     formError = '';
     formSuccess = '';
-    if (!newEmp.name || !newEmp.role || !newEmp.department || !newEmp.email || !newEmp.phone || !newEmp.hireDate) {
+  if (!newEmp.name || !newEmp.role || !newEmp.department || !newEmp.email || !newEmp.phone || !newEmp.hireDate) {
       formError = 'All fields are required.';
       return;
     }
-    if (employees.some((e: Employee) => e.email === newEmp.email)) {
-      formError = 'An employee with this email already exists.';
-      return;
+    try {
+      await createEmployee({ ...newEmp });
+      formSuccess = 'Employee added successfully!';
+      await loadEmployees();
+      setTimeout(() => {
+        showEmployeeForm = false;
+        formSuccess = '';
+        newEmp = { name: '', role: '', department: '', email: '', phone: '', hireDate: '', status: 'Active' };
+      }, 1200);
+    } catch (e) {
+      formError = 'Failed to add employee.';
     }
-    employees = [
-      ...employees,
-      { id: Math.max(0, ...employees.map((e: Employee) => e.id)) + 1, ...newEmp, avatar: '👤' }
-    ];
-    formSuccess = 'Employee added successfully!';
-    setTimeout(() => {
-      showEmployeeForm = false;
-      formSuccess = '';
-      newEmp = { name: '', role: '', department: '', email: '', phone: '', hireDate: '', status: 'Active' };
-    }, 1200);
   }
   function viewEmployee(emp: Employee) { selectedEmployee = emp; }
   function closeEmployeeProfile() { selectedEmployee = null; }

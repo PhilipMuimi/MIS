@@ -4,20 +4,50 @@
   import AlertCard from '$lib/components/AlertCard.svelte';
   import Button from '$lib/components/Button.svelte';
   
-  // Sample data - this would come from your API/database
-  const financialMetrics = {
-    totalIncome: 120000,
-    totalExpenses: 80000,
-    netProfit: 40000,
-    cashFlow: [
-      { month: 'Jan', value: 15000 },
-      { month: 'Feb', value: 18000 },
-      { month: 'Mar', value: 22000 },
-      { month: 'Apr', value: 19000 },
-      { month: 'May', value: 25000 },
-      { month: 'Jun', value: 28000 }
-    ]
-  };
+  import { onMount } from 'svelte';
+  import { getFinanceTransactions } from '$lib/api/finance_transactions';
+  let transactions = [];
+  let loading = false;
+  let totalIncome = 0;
+  let totalExpenses = 0;
+  let netProfit = 0;
+  let cashFlow = [];
+  let availableCash = 0;
+  // Fetch and compute metrics
+  onMount(async () => {
+    loading = true;
+    try {
+      let data = await getFinanceTransactions();
+      // Normalize type for consistency
+      transactions = data.map(t => ({
+        ...t,
+        type: t.type === 'income' ? 'Income' : t.type === 'expenditure' ? 'Expense' : t.type
+      }));
+      // Compute totals
+      totalIncome = transactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      totalExpenses = transactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      netProfit = totalIncome - totalExpenses;
+      // Cash flow by month (current year)
+      const now = new Date();
+      const months = Array.from({length: 12}, (_, i) => i);
+      cashFlow = months.map(m => {
+        const monthIncome = transactions.filter(t => {
+          const d = t.date ? new Date(t.date) : null;
+          return t.type === 'Income' && d && d.getMonth() === m && d.getFullYear() === now.getFullYear();
+        }).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        const monthExpense = transactions.filter(t => {
+          const d = t.date ? new Date(t.date) : null;
+          return t.type === 'Expense' && d && d.getMonth() === m && d.getFullYear() === now.getFullYear();
+        }).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        return { month: m, value: monthIncome - monthExpense };
+      });
+      // Available cash (sum of all income minus expenses)
+      availableCash = totalIncome - totalExpenses;
+    } catch (e) {
+      console.error('Error loading dashboard metrics:', e);
+    }
+    loading = false;
+  });
   
   const alerts = [
     {
@@ -36,12 +66,7 @@
     }
   ];
   
-  const departmentStats = [
-    { name: 'Finance', documents: 25, records: 120, activity: 'high' },
-    { name: 'HR', documents: 18, records: 85, activity: 'medium' },
-    { name: 'R&D', documents: 32, records: 95, activity: 'high' },
-    { name: 'Sales', documents: 15, records: 60, activity: 'low' }
-  ];
+  // Remove all simulated departmentStats and legacy dashboard values. Only real-time data is shown below.
 </script>
 
 <Layout>
@@ -59,13 +84,13 @@
           <!-- Total Income Card -->
           <div class="metric-card">
             <div class="metric-card-title">Total Income</div>
-            <div class="metric-card-value">$2,450,000</div>
+            <div class="metric-card-value">${totalIncome.toLocaleString()}</div>
           </div>
           
           <!-- Net Profit Card -->
           <div class="card">
             <div class="metric-card-title">Net Profit</div>
-            <div class="metric-card-profit">560,000</div>
+            <div class="metric-card-profit">{netProfit.toLocaleString()}</div>
           </div>
         </div>
 
@@ -74,11 +99,11 @@
           <div class="card-title">Cash Flow</div>
           <div class="chart-container bg-gray-50 rounded flex items-center justify-center">
             <svg viewBox="0 0 400 120" class="w-full h-full">
-              <polyline 
-                fill="none" 
-                stroke="#3B82F6" 
+              <polyline
+                fill="none"
+                stroke="#3B82F6"
                 stroke-width="2"
-                points="20,80 80,70 140,50 200,65 260,40 320,30 380,35"
+                points={cashFlow.map((cf, i) => `${20 + i * 30},${100 - Math.max(0, Math.min(90, cf.value / 10000))}`).join(' ')}
               />
             </svg>
           </div>

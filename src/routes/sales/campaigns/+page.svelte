@@ -1,9 +1,23 @@
 ﻿<script lang="ts">
-	let campaigns = [
-		{ id: '1', name: 'Q4 Pharma Launch', start: '2024-10-01', end: '2024-12-31', budget: 50000, status: 'Active', description: 'Launch of new pharma products for Q4.' },
-		{ id: '2', name: 'Health Awareness Week', start: '2024-09-10', end: '2024-09-17', budget: 15000, status: 'Completed', description: 'Community health awareness campaign.' },
-		{ id: '3', name: 'Digital Marketing Push', start: '2024-11-01', end: '2024-11-30', budget: 20000, status: 'Planned', description: 'Online marketing for new product lines.' }
-	];
+import { onMount } from 'svelte';
+import { getCampaigns, createCampaign, updateCampaign } from '$lib/api/campaigns';
+
+let campaigns: any[] = [];
+let loading = false;
+
+async function loadCampaigns() {
+	loading = true;
+	try {
+		campaigns = await getCampaigns();
+	} catch (e) {
+		// handle error
+	}
+	loading = false;
+}
+
+onMount(() => {
+	loadCampaigns();
+});
 	let showAddModal = false;
 	let showEditModal = false;
 	let showViewModal = false;
@@ -14,19 +28,43 @@
 			showAddModal = true;
 			newCampaign = { name: '', start: '', end: '', budget: 0, status: 'Planned', description: '' };
 		}
-		function addCampaign() {
-			campaigns = [...campaigns, { ...newCampaign, budget: Number(newCampaign.budget), id: Date.now().toString() }];
+	async function addCampaign() {
+		try {
+			await createCampaign({
+				name: newCampaign.name,
+				start_date: newCampaign.start,
+				end_date: newCampaign.end,
+				budget: Number(newCampaign.budget),
+				status: newCampaign.status,
+				description: newCampaign.description
+			});
+			await loadCampaigns();
 			showAddModal = false;
+		} catch (e) {
+			// handle error
 		}
+	}
 	function openEditModal(campaign: any) {
 		selectedCampaign = { ...campaign };
 		showEditModal = true;
 	}
-		function saveEdit() {
-			campaigns = campaigns.map(c => c.id === selectedCampaign.id ? { ...selectedCampaign, budget: Number(selectedCampaign.budget) } : c);
-			showEditModal = false;
-			selectedCampaign = null;
-		}
+async function saveEdit() {
+	try {
+		await updateCampaign(selectedCampaign.id, {
+			name: selectedCampaign.name,
+			start_date: selectedCampaign.start,
+			end_date: selectedCampaign.end,
+			budget: Number(selectedCampaign.budget),
+			status: selectedCampaign.status,
+			description: selectedCampaign.description
+		});
+		await loadCampaigns();
+		showEditModal = false;
+		selectedCampaign = null;
+	} catch (e) {
+		// handle error
+	}
+}
 	function openViewModal(campaign: any) {
 		selectedCampaign = campaign;
 		showViewModal = true;

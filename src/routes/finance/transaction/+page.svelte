@@ -91,6 +91,36 @@
     transactionForm.supportingDocument = file;
   }
 
+  import { getFinanceTransactions, createFinanceTransaction, updateFinanceTransaction, deleteFinanceTransaction } from '$lib/api/finance_transactions';
+
+  import { onMount } from 'svelte';
+
+  let transactions: any[] = [];
+  let loadingTransactions = false;
+  let editId: string | null = null;
+  let editForm: TransactionForm | null = null;
+
+  async function loadTransactions() {
+    loadingTransactions = true;
+    try {
+      let data = await getFinanceTransactions();
+      // Normalize type to 'Income' or 'Expense' for consistency
+      transactions = data.map(t => ({
+        ...t,
+        type: t.type === 'income' ? 'Income' : t.type === 'expenditure' ? 'Expense' : t.type
+      }));
+      console.log('Loaded transactions:', transactions);
+    } catch (e) {
+      // handle error
+      console.error('Error loading transactions:', e);
+    }
+    loadingTransactions = false;
+  }
+
+  onMount(() => {
+    loadTransactions();
+  });
+
   // Handle form submission
   async function handleSubmit() {
     if (!validateForm()) return;
@@ -98,23 +128,51 @@
     isSubmitting = true;
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Transaction submitted:', {
-        ...transactionForm,
-        amount: parseFloat(transactionForm.amount)
-      });
-
-      // Show success message and redirect
-      alert('Transaction saved successfully!');
-      goto('/finance');
-      
+      const formData = new FormData();
+      formData.append('type', transactionForm.type);
+      formData.append('amount', transactionForm.amount);
+      formData.append('description', transactionForm.description);
+      formData.append('category', transactionForm.category);
+      formData.append('department', transactionForm.department);
+      formData.append('date', transactionForm.date);
+      if (transactionForm.supportingDocument) {
+        formData.append('supportingDocument', transactionForm.supportingDocument);
+      }
+      if (editId) {
+        await updateFinanceTransaction(editId, formData);
+        alert('Transaction updated successfully!');
+      } else {
+        await createFinanceTransaction(formData);
+        alert('Transaction saved successfully!');
+      }
+      await loadTransactions();
+      resetForm();
+      editId = null;
     } catch (error) {
       console.error('Error saving transaction:', error);
       alert('Error saving transaction. Please try again.');
     } finally {
       isSubmitting = false;
+    }
+  }
+
+  function startEdit(tx: any) {
+    editId = tx.id;
+    transactionForm = {
+      type: tx.type,
+      amount: tx.amount,
+      description: tx.description,
+      category: tx.category,
+      department: tx.department,
+      date: tx.date,
+      supportingDocument: null // File editing not supported in this UI
+    };
+  }
+
+  async function handleDelete(id: string) {
+    if (confirm('Are you sure you want to delete this transaction?')) {
+      await deleteFinanceTransaction(id);
+      await loadTransactions();
     }
   }
 
@@ -130,20 +188,63 @@
       supportingDocument: null
     };
     errors = {};
+    editId = null;
   }
 </script>
 
 <Layout>
-  <svelte:fragment slot="title">Add Transaction</svelte:fragment>
-  <svelte:fragment slot="subtitle">Record a new financial transaction</svelte:fragment>
+  <svelte:fragment slot="title">{editId ? 'Edit Transaction' : 'Add Transaction'}</svelte:fragment>
+  <svelte:fragment slot="subtitle">{editId ? 'Update an existing financial transaction' : 'Record a new financial transaction'}</svelte:fragment>
 
   <div class="max-w-2xl">
+    <!-- List Transactions -->
+    <div class="card" style="margin-bottom:2rem;">
+      <div class="card-header">
+        <h2 class="card-title">All Transactions</h2>
+      </div>
+      {#if loadingTransactions}
+        <div style="padding:1rem;">Loading...</div>
+      {:else if transactions.length === 0}
+        <div style="padding:1rem;">No transactions found.</div>
+      {:else}
+        <table class="table w-full">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Description</th>
+              <th>Category</th>
+              <th>Department</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each transactions as tx}
+              <tr>
+                <td>{tx.type}</td>
+                <td>${tx.amount}</td>
+                <td>{tx.description}</td>
+                <td>{tx.category}</td>
+                <td>{tx.department}</td>
+                <td>{tx.date}</td>
+                <td>
+                  <button class="btn btn-xs btn-outline" on:click={() => startEdit(tx)}>Edit</button>
+                  <button class="btn btn-xs btn-outline" on:click={() => handleDelete(tx.id)} style="margin-left:0.5rem;">Delete</button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </div>
+
     <!-- Form Card -->
     <div class="card">
       <div class="card-header">
         <h2 class="card-title">Transaction Details</h2>
         <p style="font-size: 0.875rem; color: #6b7280;">
-          Fill out the form below to record a new financial transaction.
+          Fill out the form below to {editId ? 'update' : 'record'} a financial transaction.
         </p>
       </div>
 

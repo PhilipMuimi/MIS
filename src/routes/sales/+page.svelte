@@ -2,36 +2,48 @@
   import Layout from '$lib/components/Layout.svelte';
   import MetricCard from '$lib/components/MetricCard.svelte';
   import Button from '$lib/components/Button.svelte';
-  
-  const campaigns = [
-    {
-      id: 1,
-      name: 'Summer Health Campaign',
-      status: 'Active',
-      budget: 25000,
-      spent: 18000,
-      leads: 450,
-      conversions: 89
-    },
-    {
-      id: 2,
-      name: 'Back to School Vitamins',
-      status: 'Planning',
-      budget: 15000,
-      spent: 2000,
-      leads: 120,
-      conversions: 15
-    },
-    {
-      id: 3,
-      name: 'Winter Immunity Boost',
-      status: 'Completed',
-      budget: 20000,
-      spent: 19500,
-      leads: 680,
-      conversions: 156
+  import { onMount } from 'svelte';
+  import { getCampaigns } from '$lib/api/campaigns';
+
+  let campaigns: any[] = [];
+  let loading = false;
+
+  // Metrics
+  let monthlySales = 0;
+  let monthlySalesChange = 0;
+  let activeLeads = 0;
+  let activeLeadsChange = 0;
+  let conversionRate = 0;
+  let conversionRateChange = 0;
+  let campaignROI = 0;
+
+  async function loadCampaigns() {
+    loading = true;
+    try {
+      campaigns = await getCampaigns();
+      // Compute metrics from campaigns data
+      // Example: sum up sales, leads, conversions, etc.
+      monthlySales = campaigns.reduce((sum, c) => sum + (c.sales ?? 0), 0);
+      activeLeads = campaigns.reduce((sum, c) => sum + (c.leads ?? 0), 0);
+      const totalConversions = campaigns.reduce((sum, c) => sum + (c.conversions ?? 0), 0);
+      conversionRate = activeLeads > 0 ? ((totalConversions / activeLeads) * 100) : 0;
+      // ROI: (total revenue - total spent) / total spent * 100
+      const totalSpent = campaigns.reduce((sum, c) => sum + (c.spent ?? 0), 0);
+      const totalRevenue = campaigns.reduce((sum, c) => sum + (c.revenue ?? 0), 0);
+      campaignROI = totalSpent > 0 ? ((totalRevenue - totalSpent) / totalSpent) * 100 : 0;
+      // Simulate change values for now
+      monthlySalesChange = 15;
+      activeLeadsChange = 8;
+      conversionRateChange = 2.3;
+    } catch (e) {
+      // handle error
     }
-  ];
+    loading = false;
+  }
+
+  onMount(() => {
+    loadCampaigns();
+  });
 </script>
 
 <Layout>
@@ -52,59 +64,34 @@
       <div class="metrics-cards">
         <MetricCard
           title="Monthly Sales"
-          value="$125,000"
-          change="+15% from last month"
-          trend="up"
+          value={monthlySales.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+          change={`+${monthlySalesChange}% from last month`}
+          trend={monthlySalesChange >= 0 ? 'up' : 'down'}
           color="success"
         />
         <MetricCard
           title="Active Leads"
-          value="1,250"
-          change="+8% this week"
-          trend="up"
+          value={activeLeads.toLocaleString()}
+          change={`+${activeLeadsChange}% this week`}
+          trend={activeLeadsChange >= 0 ? 'up' : 'down'}
           color="primary"
         />
         <MetricCard
           title="Conversion Rate"
-          value="18.5%"
-          change="+2.3% improvement"
-          trend="up"
+          value={conversionRate.toFixed(1) + '%'}
+          change={`${conversionRateChange >= 0 ? '+' : ''}${conversionRateChange}% improvement`}
+          trend={conversionRateChange >= 0 ? 'up' : 'down'}
           color="success"
         />
         <MetricCard
           title="Campaign ROI"
-          value="285%"
+          value={campaignROI.toFixed(0) + '%'}
           change="Average return"
           trend="neutral"
           color="info"
         />
       </div>
     </div>
-<style>
-.sales-marketing-bg {
-  background: linear-gradient(120deg, #f0f4ff 0%, #f9fafb 100%);
-  min-height: 100vh;
-}
-.sales-metrics-chart {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2.5rem;
-  margin-bottom: 2.5rem;
-  align-items: flex-start;
-}
-.metrics-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 1.2rem;
-  flex: 2;
-}
-@media (max-width: 900px) {
-  .sales-metrics-chart {
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-}
-</style>
 
     <!-- Campaigns List -->
     <div class="rounded-lg shadow-card" style="background: var(--color-background); color: var(--color-text-primary); border: 1px solid var(--color-border);">
@@ -116,13 +103,14 @@
           </Button>
         </div>
       </div>
-      
       <div class="overflow-x-auto">
         <table class="w-full" style="background: var(--color-background); color: var(--color-text-primary);">
           <thead style="background: var(--color-primary-bg, #eff6ff); color: var(--color-primary);">
             <tr style="border-bottom: 1px solid var(--color-border);">
               <th class="text-left py-3 px-6 font-medium" style="color: var(--color-text-secondary);">Campaign</th>
               <th class="text-left py-3 px-6 font-medium" style="color: var(--color-text-secondary);">Status</th>
+              <th class="text-left py-3 px-6 font-medium" style="color: var(--color-text-secondary);">Start Date</th>
+              <th class="text-left py-3 px-6 font-medium" style="color: var(--color-text-secondary);">End Date</th>
               <th class="text-left py-3 px-6 font-medium" style="color: var(--color-text-secondary);">Budget</th>
               <th class="text-left py-3 px-6 font-medium" style="color: var(--color-text-secondary);">Spent</th>
               <th class="text-left py-3 px-6 font-medium" style="color: var(--color-text-secondary);">Leads</th>
@@ -148,10 +136,12 @@
                     {campaign.status}
                   </span>
                 </td>
-                <td class="py-4 px-6" style="color: var(--color-text-secondary);">${campaign.budget.toLocaleString()}</td>
-                <td class="py-4 px-6" style="color: var(--color-text-secondary);">${campaign.spent.toLocaleString()}</td>
-                <td class="py-4 px-6" style="color: var(--color-text-secondary);">{campaign.leads}</td>
-                <td class="py-4 px-6" style="color: var(--color-text-secondary);">{campaign.conversions}</td>
+                <td class="py-4 px-6" style="color: var(--color-text-secondary);">{campaign.start_date ? new Date(campaign.start_date).toLocaleDateString() : '-'}</td>
+                <td class="py-4 px-6" style="color: var(--color-text-secondary);">{campaign.end_date ? new Date(campaign.end_date).toLocaleDateString() : '-'}</td>
+                <td class="py-4 px-6" style="color: var(--color-text-secondary);">${campaign.budget?.toLocaleString() ?? '-'}</td>
+                <td class="py-4 px-6" style="color: var(--color-text-secondary);">${campaign.spent?.toLocaleString() ?? '-'}</td>
+                <td class="py-4 px-6" style="color: var(--color-text-secondary);">{campaign.leads ?? '-'}</td>
+                <td class="py-4 px-6" style="color: var(--color-text-secondary);">{campaign.conversions ?? '-'}</td>
                 <td class="py-4 px-6">
                   <Button variant="secondary" size="sm" href={`/sales/campaigns/${campaign.id}`}>
                     View Details
@@ -159,9 +149,40 @@
                 </td>
               </tr>
             {/each}
+            {#if campaigns.length === 0}
+              <tr>
+                <td colspan="9" style="text-align: center; color: var(--color-text-secondary); padding: 1.5rem;">No campaigns found.</td>
+              </tr>
+            {/if}
           </tbody>
         </table>
       </div>
     </div>
   </div>
 </Layout>
+
+<style>
+.sales-marketing-bg {
+  background: linear-gradient(120deg, #f0f4ff 0%, #f9fafb 100%);
+  min-height: 100vh;
+}
+.sales-metrics-chart {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+  margin-bottom: 2.5rem;
+  align-items: flex-start;
+}
+.metrics-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.2rem;
+  flex: 2;
+}
+@media (max-width: 900px) {
+  .sales-metrics-chart {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+}
+</style>

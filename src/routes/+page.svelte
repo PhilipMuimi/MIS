@@ -26,51 +26,63 @@
     }>;
   }
 
+  import { getFinanceTransactions } from '$lib/api/finance_transactions';
   let dashboardData: DashboardMetrics = {
     financialOverview: {
-      totalIncome: 2450000,
-      totalExpenditure: 1890000,
-      netProfit: 560000,
-      cashFlow: 340000,
-      monthlyGrowth: 12.5
+      totalIncome: 0,
+      totalExpenditure: 0,
+      netProfit: 0,
+      cashFlow: 0,
+      monthlyGrowth: 0
     },
     departmentActivity: {
-      documentsUploaded: 234,
-      recordsCreated: 156,
-      activeProjects: 8,
-      pendingTasks: 23
+      documentsUploaded: 0,
+      recordsCreated: 0,
+      activeProjects: 0,
+      pendingTasks: 0
     },
-    systemAlerts: [
-      {
-        id: '1',
-        type: 'warning',
-        message: 'Q4 budget review deadline approaching',
-        timestamp: new Date(),
-        department: 'Finance'
-      },
-      {
-        id: '2',
-        type: 'info',
-        message: 'New employee onboarding scheduled',
-        timestamp: new Date(),
-        department: 'HR'
-      },
-      {
-        id: '3',
-        type: 'success',
-        message: 'Project milestone completed',
-        timestamp: new Date(),
-        department: 'R&D'
-      },
-      {
-        id: '4',
-        type: 'warning',
-        message: 'Monthly sales report due',
-        timestamp: new Date(),
-        department: 'Sales'
-      }
-    ]
+    systemAlerts: []
   };
+
+  let transactions: any[] = [];
+  let prevMonthIncome = 0;
+  let prevMonthExpenditure = 0;
+
+  onMount(async () => {
+    try {
+      let data = await getFinanceTransactions();
+      // Normalize type for consistency
+      transactions = data.map(t => ({
+        ...t,
+        type: t.type === 'income' ? 'Income' : t.type === 'expenditure' ? 'Expense' : t.type
+      }));
+      // Financial Overview
+      dashboardData.financialOverview.totalIncome = transactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      dashboardData.financialOverview.totalExpenditure = transactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      dashboardData.financialOverview.netProfit = dashboardData.financialOverview.totalIncome - dashboardData.financialOverview.totalExpenditure;
+      // Cash flow = income - expenditure (current month)
+      const now = new Date();
+      const thisMonthIncome = transactions.filter(t => {
+        const d = t.date ? new Date(t.date) : null;
+        return t.type === 'Income' && d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const thisMonthExpenditure = transactions.filter(t => {
+        const d = t.date ? new Date(t.date) : null;
+        return t.type === 'Expense' && d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      dashboardData.financialOverview.cashFlow = thisMonthIncome - thisMonthExpenditure;
+      // Monthly growth (compare to previous month)
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      prevMonthIncome = transactions.filter(t => {
+        const d = t.date ? new Date(t.date) : null;
+        return t.type === 'Income' && d && d.getMonth() === prevMonth.getMonth() && d.getFullYear() === prevMonth.getFullYear();
+      }).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      dashboardData.financialOverview.monthlyGrowth = prevMonthIncome > 0 ? ((thisMonthIncome - prevMonthIncome) / prevMonthIncome) * 100 : 0;
+      // TODO: Fetch department activity and system alerts from backend if available
+    } catch (e) {
+      console.error('Error loading dashboard data:', e);
+    }
+  });
 
   // Format currency
   function formatCurrency(amount: number): string {

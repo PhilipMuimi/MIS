@@ -4,18 +4,19 @@
   let password = '';
   let showPassword = false;
   let error = '';
-  function handleLogin(e: Event) {
+  import { login } from '$lib/api/auth';
+  async function handleLogin(e: Event) {
     e.preventDefault();
     error = '';
     if (!email || !password) {
       error = 'Please enter both email and password.';
       return;
     }
-    // Simulate login
-    if (email === 'admin@gonepharm.com' && password === 'admin') {
+    try {
+      await login(email, password);
       goto('/');
-    } else {
-      error = 'Invalid credentials.';
+    } catch (err: any) {
+      error = err?.message || 'Invalid credentials.';
     }
   }
 </script>

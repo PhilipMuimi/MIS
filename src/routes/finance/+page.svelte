@@ -1,5 +1,7 @@
 <script lang="ts">
   import Layout from '$lib/components/Layout.svelte';
+  import { onMount } from 'svelte';
+  import { getFinanceTransactions } from '$lib/api/finance_transactions';
   let excelExporting = false;
   let excelExportError = '';
   let showBudgetModal = false;
@@ -36,7 +38,6 @@
         Date: t.date,
         Description: t.description,
         Category: t.category,
-        Department: t.department || '',
         Type: t.type,
         Amount: t.amount,
         Documents: t.documents.join(', ')
@@ -60,86 +61,72 @@
     description: string;
     category: string;
     type: 'income' | 'expenditure';
-    department?: string;
     documents: string[];
   }
 
-  interface FinancialSummary {
-    totalIncome: number;
-    totalExpenditure: number;
-    netProfit: number;
-    monthlyIncome: number;
-    monthlyExpenditure: number;
-    budgetUtilization: number;
+  let recentTransactions: any[] = [];
+  let loadingTransactions = false;
+
+  // Real-time computed metrics
+  $: totalIncomeYTD = recentTransactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  $: totalExpenditureYTD = recentTransactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  $: netProfit = totalIncomeYTD - totalExpenditureYTD;
+  $: profitMargin = totalIncomeYTD > 0 ? (netProfit / totalIncomeYTD) * 100 : 0;
+  $: monthlyIncome = recentTransactions.filter(t => t.type === 'Income' && t.date && new Date(t.date).getMonth() === new Date().getMonth() && new Date(t.date).getFullYear() === new Date().getFullYear()).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  $: monthlyExpenditure = recentTransactions.filter(t => t.type === 'Expense' && t.date && new Date(t.date).getMonth() === new Date().getMonth() && new Date(t.date).getFullYear() === new Date().getFullYear()).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  $: budgetUtilization = totalIncomeYTD > 0 ? (totalExpenditureYTD / totalIncomeYTD) * 100 : 0;
+
+  async function loadTransactions() {
+    loadingTransactions = true;
+    try {
+      let data = await getFinanceTransactions();
+      // Normalize type to 'Income' or 'Expense' for filtering and display
+      recentTransactions = data.map(t => ({
+        ...t,
+        type: t.type === 'income' ? 'Income' : t.type === 'expenditure' ? 'Expense' : t.type
+      }));
+      console.log('Loaded finance transactions:', recentTransactions);
+      // Debug: show all transaction dates and types
+      recentTransactions.forEach(t => {
+        console.log(`Transaction: id=${t.id}, date=${t.date}, type=${t.type}, amount=${t.amount}`);
+      });
+    } catch (e) {
+      // handle error
+      console.error('Error loading finance transactions:', e);
+    }
+    loadingTransactions = false;
   }
 
-  // Sample financial data
-  let financialSummary: FinancialSummary = {
-    totalIncome: 2450000,
-    totalExpenditure: 1890000,
-    netProfit: 560000,
-    monthlyIncome: 245000,
-    monthlyExpenditure: 189000,
-    budgetUtilization: 77.2
-  };
-
-  let recentTransactions: Transaction[] = [
-    {
-      id: '1',
-      date: '2024-12-15',
-      amount: 125000,
-      description: 'Pharmaceutical Sales - Q4',
-      category: 'Sales Income',
-      type: 'income',
-      department: 'Sales',
-      documents: ['invoice_Q4_2024.pdf']
-    },
-    {
-      id: '2',
-      date: '2024-12-14',
-      amount: 45000,
-      description: 'Employee Salaries - December',
-      category: 'Salaries',
-      type: 'expenditure',
-      department: 'HR',
-      documents: ['payroll_dec_2024.pdf']
-    },
-    {
-      id: '3',
-      date: '2024-12-13',
-      amount: 15000,
-      description: 'Laboratory Equipment',
-      category: 'Supplies',
-      type: 'expenditure',
-      department: 'R&D',
-      documents: ['equipment_receipt.pdf']
-    },
-    {
-      id: '4',
-      date: '2024-12-12',
-      amount: 32000,
-      description: 'Marketing Campaign Revenue',
-      category: 'Marketing Income',
-      type: 'income',
-      department: 'Sales',
-      documents: ['campaign_report.pdf']
-    },
-    {
-      id: '5',
-      date: '2024-12-11',
-      amount: 8500,
-      description: 'Office Supplies',
-      category: 'Supplies',
-      type: 'expenditure',
-      department: 'Administration',
-      documents: []
-    }
-  ];
+  onMount(() => {
+    loadTransactions();
+  });
 
   // Filter states
   let selectedPeriod = 'current-month';
-  let selectedType = 'all';
-  let selectedDepartment = 'all';
+  let selectedType = 'All';
+
+  // Filtered transactions for current month and type
+  // Filtered transactions for selected period and type (case-sensitive, matches DB)
+  $: filteredTransactions = recentTransactions.filter(t => {
+    const txDate = t.date ? new Date(t.date) : null;
+    const now = new Date();
+    let isPeriod = false;
+    if (selectedPeriod === 'current-month') {
+      isPeriod = txDate && txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+    } else if (selectedPeriod === 'last-month') {
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      isPeriod = txDate && txDate.getMonth() === lastMonth.getMonth() && txDate.getFullYear() === lastMonth.getFullYear();
+    } else if (selectedPeriod === 'quarter') {
+      const quarter = Math.floor(now.getMonth() / 3);
+      isPeriod = txDate && txDate.getFullYear() === now.getFullYear() && Math.floor(txDate.getMonth() / 3) === quarter;
+    } else if (selectedPeriod === 'year') {
+      isPeriod = txDate && txDate.getFullYear() === now.getFullYear();
+    }
+    const typeMatch = selectedType === 'All' || t.type === selectedType;
+    return isPeriod && typeMatch;
+  });
+  // Debug: log filtered transactions
+  console.log('Filtered transactions:', filteredTransactions);
 
   // Format currency
   function formatCurrency(amount: number): string {
@@ -165,15 +152,7 @@
   }
 
   // Get filtered transactions
-  function getFilteredTransactions(): Transaction[] {
-    return recentTransactions.filter(transaction => {
-      if (selectedType !== 'all' && transaction.type !== selectedType) return false;
-      if (selectedDepartment !== 'all' && transaction.department !== selectedDepartment) return false;
-      return true;
-    });
-  }
 
-  $: filteredTransactions = getFilteredTransactions();
 </script>
 
 <Layout>
@@ -187,40 +166,40 @@
       <!-- Total Income -->
       <div class="metric-card" style="background: var(--color-background); color: var(--color-text-primary); border: 1px solid var(--color-border);">
         <div class="metric-label">Total Income (YTD)</div>
-        <div class="metric-value" style="color: var(--color-success);">{formatCurrency(financialSummary.totalIncome)}</div>
+        <div class="metric-value" style="color: var(--color-success);">${totalIncomeYTD.toLocaleString()}</div>
         <div class="metric-change positive">
           <span></span>
-          <span>Monthly: {formatCurrency(financialSummary.monthlyIncome)}</span>
+          <span>Monthly: ${monthlyIncome.toLocaleString()}</span>
         </div>
       </div>
 
       <!-- Total Expenditure -->
       <div class="card" style="background: var(--color-background); color: var(--color-text-primary); border: 1px solid var(--color-border);">
         <div class="metric-label">Total Expenditure (YTD)</div>
-        <div class="metric-value" style="color: var(--color-error);">{formatCurrency(financialSummary.totalExpenditure)}</div>
+        <div class="metric-value" style="color: var(--color-error);">${totalExpenditureYTD.toLocaleString()}</div>
         <div class="metric-change">
           <span></span>
-          <span>Monthly: {formatCurrency(financialSummary.monthlyExpenditure)}</span>
+          <span>Monthly: ${monthlyExpenditure.toLocaleString()}</span>
         </div>
       </div>
 
       <!-- Net Profit -->
       <div class="metric-card" style="background: var(--color-background); color: var(--color-text-primary); border: 1px solid var(--color-border);">
         <div class="metric-label">Net Profit</div>
-        <div class="metric-value" style="color: var(--color-success);">{formatCurrency(financialSummary.netProfit)}</div>
+        <div class="metric-value" style="color: var(--color-success);">${netProfit.toLocaleString()}</div>
         <div class="metric-change positive">
           <span></span>
-          <span>Profit Margin: {((financialSummary.netProfit / financialSummary.totalIncome) * 100).toFixed(1)}%</span>
+          <span>Profit Margin: {profitMargin.toFixed(1)}%</span>
         </div>
       </div>
 
       <!-- Budget Utilization -->
       <div class="card" style="background: var(--color-background); color: var(--color-text-primary); border: 1px solid var(--color-border);">
         <div class="metric-label">Budget Utilization</div>
-        <div class="metric-value">{financialSummary.budgetUtilization.toFixed(1)}%</div>
+        <div class="metric-value">{budgetUtilization.toFixed(1)}%</div>
         <div class="metric-change">
           <span></span>
-          <span>Within limits</span>
+          <span>{budgetUtilization < 100 ? 'Within limits' : 'Over budget'}</span>
         </div>
       </div>
     </div>
@@ -299,28 +278,31 @@
           </select>
           
           <select bind:value={selectedType} class="form-select">
-            <option value="all">All Types</option>
-            <option value="income">Income</option>
-            <option value="expenditure">Expenditure</option>
-          </select>
-          
-          <select bind:value={selectedDepartment} class="form-select">
-            <option value="all">All Departments</option>
-            <option value="Sales">Sales</option>
-            <option value="HR">HR</option>
-            <option value="R&D">R&D</option>
-            <option value="Administration">Administration</option>
+          <option value="All">All Types</option>
+          <option value="Income">Income</option>
+          <option value="Expense">Expense</option>
           </select>
         </div>
       </div>
 
-      <table class="table" style="background: var(--color-background); color: var(--color-text-primary);">
+      <!-- Recent Transactions Filters -->
+      <div class="flex gap-4 mb-2">
+        <div>
+          <label for="typeFilter" class="form-label">Type:</label>
+          <select id="typeFilter" class="form-select" bind:value={selectedType}>
+            <option value="All">All Types</option>
+            <option value="Income">Income</option>
+            <option value="Expense">Expense</option>
+          </select>
+        </div>
+      </div>
+      <!-- Recent Transactions Table (current month, filtered by type) -->
+      <table class="table w-full" style="background: var(--color-background); color: var(--color-text-primary);">
         <thead style="background: var(--color-primary-bg, #eff6ff); color: var(--color-primary);">
           <tr>
             <th>Date</th>
             <th>Description</th>
             <th>Category</th>
-            <th>Department</th>
             <th>Type</th>
             <th>Amount</th>
             <th>Documents</th>
@@ -328,28 +310,27 @@
           </tr>
         </thead>
         <tbody>
-          {#each filteredTransactions as transaction}
+          {#each filteredTransactions as t}
             <tr style="border-bottom: 1px solid var(--color-border);">
-              <td>{formatDate(transaction.date)}</td>
+              <td>{formatDate(t.date)}</td>
               <td>
-                <div class="font-medium">{transaction.description}</div>
+                <div class="font-medium">{t.description}</div>
               </td>
               <td>
-                <span class="badge" style="background: var(--color-info-bg, #e0f2fe); color: var(--color-info);">{transaction.category}</span>
+                <span class="badge" style="background: var(--color-info-bg, #e0f2fe); color: var(--color-info);">{t.category}</span>
               </td>
-              <td>{transaction.department || 'N/A'}</td>
               <td>
-                <span class="badge" style="background: {transaction.type === 'income' ? 'var(--color-success-bg, #d1fae5)' : 'var(--color-warning-bg, #fef9c3)'}; color: {transaction.type === 'income' ? 'var(--color-success)' : 'var(--color-warning)'};">
-                  {transaction.type === 'income' ? '↗️ Income' : '↙️ Expenditure'}
+                <span class="badge" style="background: {t.type === 'Income' ? 'var(--color-success-bg, #d1fae5)' : 'var(--color-warning-bg, #fef9c3)'}; color: {t.type === 'Income' ? 'var(--color-success)' : 'var(--color-warning)'};">
+                  {t.type === 'Income' ? '↗️ Income' : '↙️ Expense'}
                 </span>
               </td>
-              <td style="color: {transaction.type === 'income' ? 'var(--color-success)' : 'var(--color-error)'}; font-weight: bold;">
-                {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
+              <td style="color: {t.type === 'income' ? 'var(--color-success)' : 'var(--color-error)'}; font-weight: bold;">
+                {t.type === 'Income' ? '+' : '-'}{formatCurrency(t.amount)}
               </td>
               <td>
-                {#if transaction.documents.length > 0}
+                {#if t.documents.length > 0}
                   <div class="flex gap-1">
-                    {#each transaction.documents as doc}
+                    {#each t.documents as doc}
                       <button class="text-xs px-2 py-1 rounded" style="background: var(--color-background-alt, #f3f4f6); color: var(--color-text-primary); border: 1px solid var(--color-border);" title="View {doc}">
                          {doc.substring(0, 10)}...
                       </button>
@@ -367,16 +348,13 @@
               </td>
             </tr>
           {/each}
+          {#if filteredTransactions.length === 0}
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--color-text-secondary); padding: 1.5rem;">No transactions found</td>
+            </tr>
+          {/if}
         </tbody>
       </table>
-
-      {#if filteredTransactions.length === 0}
-        <div class="p-8 text-center" style="color: var(--color-text-secondary);">
-          <div class="text-4xl mb-4">📊</div>
-          <div class="text-lg font-medium mb-2">No transactions found</div>
-          <div class="text-sm">Try adjusting your filters or add a new transaction.</div>
-        </div>
-      {/if}
     </div>
   </section>
 </Layout>

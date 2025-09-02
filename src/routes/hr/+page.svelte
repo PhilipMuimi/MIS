@@ -6,68 +6,40 @@
   interface Employee {
     id: number;
     name: string;
-    role: string;
+    position: string;
     department: string;
     email: string;
     phone: string;
-    hireDate: string;
+    hire_date: string;
     status: string;
-    avatar: string;
   }
   
   let selectedEmployee: Employee | null = null;
   let showEmployeeForm = false;
   let searchTerm = '';
-  let employees: Employee[] = [
-    {
-      id: 1,
-      name: 'Jane Smith',
-      role: 'Software Engineer',
-      department: 'Finance',
-      email: 'jane.smith@gonep.com',
-      phone: '+1 (555) 123-4567',
-      hireDate: '2021-05-01',
-      status: 'Active',
-      avatar: '👩‍💻'
-    },
-    {
-      id: 2,
-      name: 'John Doe',
-      role: 'HR Manager',
-      department: 'HR',
-      email: 'john.doe@gonep.com',
-      phone: '+1 (555) 987-6543',
-      hireDate: '2019-03-15',
-      status: 'Active',
-      avatar: '🧑‍💼'
-    },
-    {
-      id: 3,
-      name: 'Alice Brown',
-      role: 'Recruiter',
-      department: 'HR',
-      email: 'alice.brown@gonep.com',
-      phone: '+1 (555) 222-3333',
-      hireDate: '2022-08-10',
-      status: 'Active',
-      avatar: '👩‍🎓'
-    },
-    {
-      id: 4,
-      name: 'Bob Lee',
-      role: 'Accountant',
-      department: 'Finance',
-      email: 'bob.lee@gonep.com',
-      phone: '+1 (555) 444-5555',
-      hireDate: '2020-11-20',
-      status: 'Inactive',
-      avatar: '🧑‍💻'
+  import { onMount } from 'svelte';
+  import { getEmployees, createEmployee } from '$lib/api/employees';
+
+  let employees: Employee[] = [];
+  let loading = false;
+
+  async function loadEmployees() {
+    loading = true;
+    try {
+      employees = await getEmployees();
+    } catch (e) {
+      formError = 'Failed to load employees.';
     }
-  ];
+    loading = false;
+  }
+
+  onMount(() => {
+    loadEmployees();
+  });
 
   // Add employee form state
   let newEmp = {
-    name: '', role: '', department: '', email: '', phone: '', hireDate: '', status: 'Active'
+    name: '', position: '', department: '', email: '', phone: '', hire_date: '', status: 'Active'
   };
   let formError = '';
   let formSuccess = '';
@@ -80,45 +52,51 @@
     setTimeout(() => nameInput && nameInput.focus(), 50);
   }
 
-  function addEmployee() {
+  async function addEmployee() {
     formError = '';
     formSuccess = '';
-    if (!newEmp.name || !newEmp.role || !newEmp.department || !newEmp.email || !newEmp.phone || !newEmp.hireDate) {
+    if (!newEmp.name || !newEmp.position || !newEmp.department || !newEmp.email || !newEmp.phone || !newEmp.hire_date || !newEmp.status) {
       formError = 'All fields are required.';
       return;
     }
-    if (employees.some(e => e.email === newEmp.email)) {
-      formError = 'An employee with this email already exists.';
-      return;
-    }
-    employees = [
-      ...employees,
-      {
-        id: Math.max(0, ...employees.map(e => e.id)) + 1,
-        ...newEmp,
-        avatar: '👤' // fallback default
+    try {
+      await createEmployee({ ...newEmp });
+      formSuccess = 'Employee added successfully!';
+      await loadEmployees();
+      setTimeout(() => {
+        showEmployeeForm = false;
+        formSuccess = '';
+        newEmp = { name: '', position: '', department: '', email: '', phone: '', hire_date: '', status: 'Active' };
+      }, 1200);
+    } catch (e) {
+      formError = 'Failed to add employee.';
+      // Log error details for debugging
+      console.error('Add employee error:', e);
+      if (e?.data && typeof e.data === 'object') {
+        formError += ' ' + JSON.stringify(e.data);
+      } else if (e?.message) {
+        formError += ' ' + e.message;
       }
-    ];
-    formSuccess = 'Employee added successfully!';
-    setTimeout(() => {
-      showEmployeeForm = false;
-      formSuccess = '';
-      newEmp = { name: '', role: '', department: '', email: '', phone: '', hireDate: '', status: 'Active' };
-    }, 1200);
+    }
   }
 
   $: filteredEmployees = employees.filter(e =>
     e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  (e.position && e.position.toLowerCase().includes(searchTerm.toLowerCase())) ||
     e.department.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
-  const hrMetrics = {
-    totalEmployees: '45',
-    newHires: '3',
-    activeRecruitment: '5',
-    pendingLeaves: '2'
-  };
+  $: totalEmployees = employees.length;
+  $: newHires = employees.filter(e => {
+    // Consider new hires as those hired in the last 30 days
+    if (!e.hire_date) return false;
+    const hireDate = new Date(e.hire_date);
+    const now = new Date();
+    const diffDays = (now.getTime() - hireDate.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays <= 30;
+  }).length;
+  $: activeRecruitment = employees.filter(e => e.status && e.status.toLowerCase() === 'recruiting').length;
+  $: pendingLeaves = employees.filter(e => e.status && e.status.toLowerCase() === 'on leave').length;
   
   function viewEmployee(employee: Employee) {
     selectedEmployee = employee;
@@ -164,10 +142,10 @@
 </style>
 
     <div class="rnd-metrics-grid">
-      <MetricCard title="Total Employees" value={hrMetrics.totalEmployees} color="primary" />
-      <MetricCard title="New Hires" value={hrMetrics.newHires} color="success" />
-      <MetricCard title="Active Recruitment" value={hrMetrics.activeRecruitment} color="info" />
-  <MetricCard title="Pending Leaves" value={hrMetrics.pendingLeaves} color="danger" />
+      <MetricCard title="Total Employees" value={totalEmployees} color="primary" />
+      <MetricCard title="New Hires" value={newHires} color="success" />
+      <MetricCard title="Active Recruitment" value={activeRecruitment} color="info" />
+  <MetricCard title="Pending Leaves" value={pendingLeaves} color="danger" />
     </div>
 
     <div class="dashboard-row" style="align-items: flex-start;">
@@ -177,22 +155,40 @@
           <h2 class="text-lg font-semibold" style="color: var(--color-primary);">Employees</h2>
           <input class="form-input" placeholder="Search..." style="max-width: 140px;" bind:value={searchTerm} />
         </div>
-        <div style="display: flex; flex-direction: column; gap: 1rem;">
-          {#each filteredEmployees as emp}
-            <button type="button" class="flex items-center gap-4 p-3 rounded-lg cursor-pointer shadow-sm w-full text-left" style="background: var(--color-background); border: 1px solid var(--color-border);" on:click={() => viewEmployee(emp)} aria-label={`View profile for ${emp.name}`}> 
-              <div class="employee-avatar" style="font-size: 2rem; background: var(--color-primary); color: #fff; border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
-                {emp.avatar}
-              </div>
-              <div style="flex: 1;">
-                <div class="font-semibold" style="color: var(--color-primary);">{emp.name}</div>
-                <div class="text-sm" style="color: var(--color-text-secondary);">{emp.role} &mdash; {emp.department}</div>
-              </div>
-              <span class="badge" style="background: {emp.status === 'Active' ? 'var(--color-success-bg, #d1fae5)' : 'var(--color-warning-bg, #fef9c3)'}; color: {emp.status === 'Active' ? 'var(--color-success)' : 'var(--color-warning)'};">{emp.status}</span>
-            </button>
-          {/each}
-          {#if filteredEmployees.length === 0}
-            <div class="text-center py-6" style="color: var(--color-text-secondary);">No employees found.</div>
-          {/if}
+        <div style="overflow-x: auto;">
+          <table class="employee-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: var(--color-primary-bg, #f3f6fa);">
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-primary);">Name</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-primary);">Position</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-primary);">Department</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-primary);">Email</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-primary);">Phone</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-primary);">Hire Date</th>
+                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: var(--color-primary);">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each filteredEmployees as emp}
+                <tr class="employee-row" style="border-bottom: 1px solid var(--color-border); cursor: pointer;" on:click={() => viewEmployee(emp)}>
+                  <td style="padding: 0.7rem 0.75rem;">{emp.name}</td>
+                  <td style="padding: 0.7rem 0.75rem;">{emp.position}</td>
+                  <td style="padding: 0.7rem 0.75rem;">{emp.department}</td>
+                  <td style="padding: 0.7rem 0.75rem;">{emp.email}</td>
+                  <td style="padding: 0.7rem 0.75rem;">{emp.phone}</td>
+                  <td style="padding: 0.7rem 0.75rem;">{emp.hire_date}</td>
+                  <td style="padding: 0.7rem 0.75rem;">
+                    <span class="badge" style="background: {emp.status === 'Active' ? 'var(--color-success-bg, #d1fae5)' : 'var(--color-warning-bg, #fef9c3)'}; color: {emp.status === 'Active' ? 'var(--color-success)' : 'var(--color-warning)'}; padding: 0.3em 0.8em; border-radius: 0.7em; font-size: 0.95em; font-weight: 500;">{emp.status}</span>
+                  </td>
+                </tr>
+              {/each}
+              {#if filteredEmployees.length === 0}
+                <tr>
+                  <td colspan="7" style="text-align: center; color: var(--color-text-secondary); padding: 1.5rem;">No employees found.</td>
+                </tr>
+              {/if}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -205,12 +201,10 @@
           </div>
           <div style="padding: 2rem;">
             <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem;">
-              <div class="employee-avatar" style="font-size: 2.5rem; background: var(--color-primary); color: #fff; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;">
-                {selectedEmployee.avatar}
-              </div>
+              <!-- Avatar removed -->
               <div>
                 <div class="font-bold text-xl" style="color: var(--color-primary);">{selectedEmployee.name}</div>
-                <div class="text-sm" style="color: var(--color-text-secondary);">{selectedEmployee.role} &mdash; {selectedEmployee.department}</div>
+                <div class="text-sm" style="color: var(--color-text-secondary);">{selectedEmployee.position} &mdash; {selectedEmployee.department}</div>
                 <span class="badge" style="background: {selectedEmployee.status === 'Active' ? 'var(--color-success-bg, #d1fae5)' : 'var(--color-warning-bg, #fef9c3)'}; color: {selectedEmployee.status === 'Active' ? 'var(--color-success)' : 'var(--color-warning)'};">{selectedEmployee.status}</span>
               </div>
             </div>
@@ -225,7 +219,7 @@
               </div>
               <div>
                 <dt class="font-semibold">Hire Date</dt>
-                <span>{selectedEmployee.hireDate}</span>
+                <span>{selectedEmployee.hire_date}</span>
               </div>
               <div>
                 <dt class="font-semibold">Department</dt>
@@ -240,7 +234,7 @@
     <!-- Add Employee Modal -->
     {#if showEmployeeForm}
       <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.18); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 2rem;">
-        <div style="background: var(--color-background); border-radius: 1rem; box-shadow: 0 4px 16px rgba(16,30,54,0.12); width: 100%; max-width: 340px; padding: 1.25rem 1.5rem; position: relative; border: 1px solid var(--color-border); color: var(--color-text-primary);">
+        <div style="background: var(--color-background); border-radius: 1rem; box-shadow: 0 4px 16px rgba(16,30,54,0.12); width: 100%; max-width: 400px; min-width: 320px; padding: 1.25rem 1.5rem 2.5rem 1.5rem; position: relative; border: 1px solid var(--color-border); color: var(--color-text-primary);">
           <h2 class="text-lg font-semibold mb-3" style="color: var(--color-primary);">Add Employee</h2>
           <form on:submit|preventDefault={addEmployee}>
             <div class="form-group mb-2">
@@ -248,12 +242,21 @@
               <input id="emp-name" class="form-input" placeholder="Full name" bind:value={newEmp.name} bind:this={nameInput} />
             </div>
             <div class="form-group mb-2">
-              <label class="form-label" for="emp-role">Role</label>
-              <input id="emp-role" class="form-input" placeholder="Role" bind:value={newEmp.role} />
+              <label class="form-label" for="emp-position">Position</label>
+              <input id="emp-position" class="form-input" placeholder="Position" bind:value={newEmp.position} />
             </div>
             <div class="form-group mb-2">
               <label class="form-label" for="emp-dept">Department</label>
-              <input id="emp-dept" class="form-input" placeholder="Department" bind:value={newEmp.department} />
+              <select id="emp-dept" class="form-select" bind:value={newEmp.department}>
+    <option value="">Select department</option>
+    <option value="HR">HR</option>
+    <option value="Finance">Finance</option>
+    <option value="R&D">R&amp;D</option>
+    <option value="Sales">Sales</option>
+    <option value="IT">IT</option>
+    <option value="Admin">Admin</option>
+    <!-- Add more as needed -->
+  </select>
             </div>
             <div class="form-group mb-2">
               <label class="form-label" for="emp-email">Email</label>
@@ -265,7 +268,7 @@
             </div>
             <div class="form-group mb-2">
               <label class="form-label" for="emp-hiredate">Hire Date</label>
-              <input id="emp-hiredate" class="form-input" type="date" bind:value={newEmp.hireDate} />
+              <input id="emp-hiredate" class="form-input" type="date" bind:value={newEmp.hire_date} />
             </div>
             <div class="form-group mb-2">
               <label class="form-label" for="emp-status">Status</label>

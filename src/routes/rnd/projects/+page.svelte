@@ -2,11 +2,25 @@
   import { onMount } from 'svelte';
   import Button from '$lib/components/Button.svelte';
   let showModal = false;
-  let projects = [
-    { id: 1, name: 'Antibiotic Research', status: 'In Progress', lead: 'Dr. Sarah Johnson', deadline: '2025-12-15' },
-    { id: 2, name: 'Vaccine Phase II', status: 'Testing', lead: 'Dr. Mike Chen', deadline: '2026-03-20' },
-    { id: 3, name: 'Pain Relief Formula', status: 'Completed', lead: 'Dr. Lisa Wong', deadline: '2025-07-30' }
-  ];
+  import { onMount } from 'svelte';
+  import { getProjects, createProject } from '$lib/api/projects';
+
+  let projects: any[] = [];
+  let loading = false;
+
+  async function loadProjects() {
+    loading = true;
+    try {
+      projects = await getProjects();
+    } catch (e) {
+      // handle error
+    }
+    loading = false;
+  }
+
+  onMount(() => {
+    loadProjects();
+  });
 
   // Form state
   let form = { name: '', status: 'In Progress', lead: '', deadline: '' };
@@ -27,19 +41,20 @@
     if (!form.deadline.trim()) errors.deadline = 'Deadline is required.';
     return !errors.name && !errors.lead && !errors.deadline;
   }
-  function addProject() {
+  async function addProject() {
     if (!validate()) return;
-    projects = [
-      ...projects,
-      {
-        id: Math.max(0, ...projects.map(p => p.id)) + 1,
+    try {
+      await createProject({
         name: form.name,
         status: form.status,
         lead: form.lead,
         deadline: form.deadline
-      }
-    ];
-    closeModal();
+      });
+      await loadProjects();
+      closeModal();
+    } catch (e) {
+      // handle error
+    }
   }
 </script>
 

@@ -22,58 +22,25 @@
     file?: File;
   }
 
-  let documents: DocumentItem[] = [
-    {
-      id: 1,
-      name: 'Contract',
-      category: 'Contract',
-      department: 'Finance',
-      modified: '25 Jan, 1',
-      size: '2.5 MB',
-      type: 'pdf',
-      owner: 'Finance Team'
-    },
-    {
-      id: 2,
-      name: 'R&D',
-      category: 'Policies',
-      department: 'R&D',
-      modified: '82, 12',
-      size: '1.2 MB',
-      type: 'docx',
-      owner: 'R&D Team'
-    },
-    {
-      id: 3,
-      name: 'HR',
-      category: 'Policy',
-      department: 'HR',
-      modified: '01 15/2',
-      size: '890 KB',
-      type: 'pdf',
-      owner: 'HR Team'
-    },
-    {
-      id: 4,
-      name: 'Contract',
-      category: 'Confidential',
-      department: 'Finance',
-      modified: '15 day',
-      size: '3.1 MB',
-      type: 'pdf',
-      owner: 'Finance Team'
-    },
-    {
-      id: 5,
-      name: 'Policy',
-      category: 'Important',
-      department: 'HR',
-      modified: '01/15',
-      size: '1.8 MB',
-      type: 'pdf',
-      owner: 'HR Team'
+  import { onMount } from 'svelte';
+  import { getDocuments, createDocument } from '$lib/api/documents';
+
+  let documents: any[] = [];
+  let loading = false;
+
+  async function loadDocuments() {
+    loading = true;
+    try {
+      documents = await getDocuments();
+    } catch (e) {
+      // handle error
     }
-  ];
+    loading = false;
+  }
+
+  onMount(() => {
+    loadDocuments();
+  });
   
   const categories = ['All', 'Contract', 'Policies', 'Policy', 'Confidential', 'Important'];
   const departments = ['All', 'Finance', 'HR', 'R&D', 'Sales & Marketing'];
@@ -112,24 +79,22 @@
     }
   }
   let newDoc = { category: '', name: '', department: '', modified: '', file: null as File | null };
-  function handleAddDocument() {
+  async function handleAddDocument() {
     if (!newDoc.category || !newDoc.name || !newDoc.department || !newDoc.modified || !newDoc.file) return;
-    documents = [
-      ...documents,
-      {
-        id: documents.length + 1,
-        name: newDoc.name,
-        category: newDoc.category,
-        department: newDoc.department,
-        modified: newDoc.modified,
-        size: `${(newDoc.file.size / 1024 / 1024).toFixed(2)} MB`,
-        type: newDoc.file.type.split('/')[1] || 'file',
-        owner: 'You',
-        file: newDoc.file
-      }
-    ];
-    showAddDocModal = false;
-    newDoc = { category: '', name: '', department: '', modified: '', file: null };
+    const formData = new FormData();
+    formData.append('category', newDoc.category);
+    formData.append('title', newDoc.name);
+    formData.append('department', newDoc.department);
+    formData.append('upload_date', newDoc.modified);
+    formData.append('file', newDoc.file);
+    try {
+      await createDocument(formData);
+      await loadDocuments();
+      showAddDocModal = false;
+      newDoc = { category: '', name: '', department: '', modified: '', file: null };
+    } catch (e) {
+      // handle error
+    }
   }
   function handleDownload(doc: any) {
     if (doc.file) {
