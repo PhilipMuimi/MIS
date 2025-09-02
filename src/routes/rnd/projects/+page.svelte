@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import Button from '$lib/components/Button.svelte';
   let showModal = false;
-  import { onMount } from 'svelte';
   import { getProjects, createProject } from '$lib/api/projects';
 
   let projects: any[] = [];
